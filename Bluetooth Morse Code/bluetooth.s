@@ -1,6 +1,7 @@
 	.data
 
 prompt1:	.string "Pairing Mode Avticated", 0
+prompt2:    .string "Paired", 0
 on_off:		.byte 0
 
 
@@ -10,23 +11,53 @@ on_off:		.byte 0
 	.global UART0_Handler
 	.global Timer0_Handler
 
-ptr_to_prompt:	.word prompt1
+ptr_to_prompt1:	.word prompt1
+ptr_to_prompt2:  .word prompt2
 ptr_to_on_off:	.word on_off
 
 
 
+;--------------NOTES SECTION-----------------------;
+; THings that need to get done
+; - Configure HC-05 by sending data from UART0 to UART1?
+; - Interrupts when user types and print to putty
+; - Convert message typed by user of morse code into letters and convert to string on text
+; - User might have to type message on phone to send to Tiva, PuTTY outputs converted message
+;
+;A: .-        N: -.        0: -----
+;B: -...      O: ---       1: .----
+;C: -.-.      P: .--.      2: ..---
+;D: -..       Q: --.-      3: ...--
+;E: .         R: .-.       4: ....-
+;F: ..-.      S: ...       5: .....
+;G: --.       T: -         6: -....
+;H: ....      U: ..-       7: --...
+;I: ..        V: ...-      8: ---..
+;J: .---      W: .--       9: ----.
+;K: -.-       X: -..-
+;L: .-..      Y: -.-- 
+;M: --        Z: --..
+;
+;Base address of UART1 is 0x4000D000
+; Data register is offset 0x000
+;--------------------------------------------------;
+
+
+;PB0 is Rx and PB1 is Tx for UART transmission
 bluetooth:
 	PUSH {lr}
 
-	BL uart_init
-	BL uart_interrupt_init
+	BL uart0_init
+	BL uart0_interrupt_init
 	BL SW1_RGB_Init
 	BL Timer0_Init
+    BL Timer1_Init
 
-	ldr r0, ptr_to_prompt
+	ldr r0, ptr_to_prompt1
 	LDRB r0, [r0]
 	BL output_string
 
+;Infinite Loop for Program
 start:
 	B start
 
@@ -35,6 +66,28 @@ start:
 	MOV pc, lr
 
 ;-------------------------HANDLERS--------------------------------------------------
+
+UART0_Handler:
+
+	PUSH {r4,r5,r6,r7,r8,r9,r10,r11,lr}
+
+	;clear the interrupt flag
+	MOV r0, #0xC000
+	MOVT r0, #0x4000
+	LDRB r1, [r0, #0x044]
+	ORR r1, r1, #0x10
+	STRB r1, [r0, #0x044]
+
+	
+
+	POP {r4,r5,r6,r7,r8,r9,r10,r11,lr}
+
+	BX lr       	; Return
+
+
+
+
+;Blinks LED Blue every second until "Connected" to HC-05 module
 Timer0_Handler:
 
 	PUSH {r4,r5,r6,r7,r8,r9,r10,r11,lr}
@@ -62,6 +115,11 @@ off:
 	;Data register for RGB LED
 	MOV r2, #0
 	STRB r2, [r1, #0x3FC]
+
+    ;Switch on/off variable
+    MOV r5, #1
+    STRB r5, [r4]
+
 	B exit_handle
 
 on:
@@ -69,6 +127,11 @@ on:
 	LDRB r2, [r1, #0x3FC]
 	ORR r2, r2, #2
 	STRB r2, [r1, #0x3FC]
+
+    ;Switch on/off variable
+    MOV r5, #0
+    STRB r5, [r4]
+
 	B exit_handle
 
 exit_handle:
@@ -215,7 +278,7 @@ SW1_RGB_Init:
 
     POP {lr}
 	MOV pc, lr
-
+;--------------------------------------------------------
 uart1_init:
 	PUSH {lr}
 
@@ -356,7 +419,7 @@ uart0_init:
 
 ;-------------------------------------------------------------------------------
 
-uart_interrupt_init:
+uart0_interrupt_init:
 
 	PUSH {lr}
 
